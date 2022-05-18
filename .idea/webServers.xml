@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="019eb41a-18de-4069-b0d3-38c56a98627b" name="CRC" url="http://crcfe02.crc.nd.edu">
+        <fileTransfer host="crcfe02.crc.nd.edu" port="22" rootFolder="/afs/crc.nd.edu/user/j/jhuang24" accessType="SFTP">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+          <option name="port" value="22" />
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>
