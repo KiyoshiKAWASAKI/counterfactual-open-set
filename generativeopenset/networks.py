@@ -23,7 +23,11 @@ def build_networks(num_classes, epoch=None, latent_size=10, batch_size=64, **opt
     networks['classifier_kplusone'] = ClassifierClass(num_classes=num_classes, latent_size=latent_size)
 
     for net_name in networks:
+        print("net name: ", net_name)
         pth = get_pth_by_epoch(options['result_dir'], net_name, epoch)
+
+        # print(torch.load(pth)[""])
+
         if pth:
             print("Loading {} from checkpoint {}".format(net_name, pth))
             networks[net_name].load_state_dict(torch.load(pth))
@@ -46,7 +50,11 @@ def get_network_class(name):
 
 def save_networks(networks, epoch, result_dir):
     for name in networks:
+        print(name)
         weights = networks[name].state_dict()
+        print("fc1.weight", weights["fc1.weight"].shape)
+        # print("fc1.bias", weights["fc1.bias"].shape)
+
         filename = '{}/checkpoints/{}_epoch_{:04d}.pth'.format(result_dir, name, epoch)
         ensure_directory_exists(filename)
         torch.save(weights, filename)

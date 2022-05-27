@@ -2,55 +2,32 @@
 # Break on any error
 set -e
 
-DATASET_DIR=data/
-
-# Download any datasets not currently available
-# TODO: do this in python, based on --dataset
-if [ ! -f $DATASET_DIR/svhn-split0a.dataset ]; then
-    python generativeopenset/datasets/download_svhn.py
-fi
-if [ ! -f $DATASET_DIR/cifar10-split0a.dataset ]; then
-    python generativeopenset/datasets/download_cifar10.py
-fi
-if [ ! -f $DATASET_DIR/mnist-split0a.dataset ]; then
-    python generativeopenset/datasets/download_mnist.py
-fi
-if [ ! -f $DATASET_DIR/oxford102.dataset ]; then
-    python generativeopenset/datasets/download_oxford102.py
-fi
-if [ ! -f $DATASET_DIR/celeba.dataset ]; then
-    python generativeopenset/datasets/download_celeba.py
-fi
-if [ ! -f $DATASET_DIR/cifar100-animals.dataset ]; then
-    python generativeopenset/datasets/download_cifar100.py
-fi
 
 # Hyperparameters
-GAN_EPOCHS=30
+GAN_EPOCHS=3
 CLASSIFIER_EPOCHS=3
-CF_COUNT=50
+CF_COUNT=100
 GENERATOR_MODE=open_set
+DATASET_DIR=/afs/crc.nd.edu/user/j/jhuang24/scratch_50/jhuang24
+RESULT_DIR=/afs/crc.nd.edu/user/j/jhuang24/scratch_50/jhuang24/models/osrci/debug
 
+# 1. Train the initial generative model (E+G+D) and the initial classifier (C_K)
+python generativeopenset/train_gan.py --epochs $GAN_EPOCHS --result_dir $RESULT_DIR
 
-# Train the intial generative model (E+G+D) and the initial classifier (C_K)
-python src/train_gan.py --epochs $GAN_EPOCHS
+# 2. Baseline: Evaluate the standard classifier (C_k+1)
+#python generativeopenset/evaluate_classifier.py --result_dir . --mode baseline
+cp checkpoints/classifier_k_epoch_000${GAN_EPOCHS}.pth checkpoints/classifier_kplusone_epoch_000${GAN_EPOCHS}.pth
 
-# Baseline: Evaluate the standard classifier (C_k+1)
-python src/evaluate_classifier.py --result_dir . --mode baseline
-python src/evaluate_classifier.py --result_dir . --mode weibull
+# 3. Generate a number of counterfactual images (in the K+2 by K+2 square grid format)
+#python generativeopenset/generate_${GENERATOR_MODE}.py --result_dir . --count $CF_COUNT
 
-cp checkpoints/classifier_k_epoch_00${GAN_EPOCHS}.pth checkpoints/classifier_kplusone_epoch_00${GAN_EPOCHS}.pth
+# 4. Automatically label the rightmost column in each grid (ignore the others)
+#python generativeopenset/auto_label.py --output_filename generated_images_${GENERATOR_MODE}.dataset
 
-# Generate a number of counterfactual images (in the K+2 by K+2 square grid format)
-python src/generate_${GENERATOR_MODE}.py --result_dir . --count $CF_COUNT
+# 5. Train a new classifier, now using the aux_dataset containing the counterfactuals
+#python generativeopenset/train_classifier.py --epochs $CLASSIFIER_EPOCHS --aux_dataset generated_images_${GENERATOR_MODE}.dataset
 
-# Automatically label the rightmost column in each grid (ignore the others)
-python src/auto_label.py --output_filename generated_images_${GENERATOR_MODE}.dataset
+# 6. Evaluate the C_K+1 classifier, trained with the augmented data
+#python generativeopenset/evaluate_classifier.py --result_dir . --mode fuxin
 
-# Train a new classifier, now using the aux_dataset containing the counterfactuals
-python src/train_classifier.py --epochs $CLASSIFIER_EPOCHS --aux_dataset generated_images_${GENERATOR_MODE}.dataset
-
-# Evaluate the C_K+1 classifier, trained with the augmented data
-python src/evaluate_classifier.py --result_dir . --mode fuxin
-
-./print_results.sh
+#./print_results.sh

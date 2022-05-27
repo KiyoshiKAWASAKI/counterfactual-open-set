@@ -25,7 +25,8 @@ def save_options(options):
 def load_options(options):
     print("Resuming existing experiment at {} with options:".format(options['result_dir']))
 
-    param_path = get_param_path(options['result_dir'])
+    param_path = "/afs/crc.nd.edu/user/j/jhuang24/Public/darpa_sail_on/" \
+                 "counterfactual-open-set/params.json"
     old_opts = json.load(open(param_path))
 
     options.update(old_opts)

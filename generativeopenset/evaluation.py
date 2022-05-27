@@ -1,9 +1,10 @@
 import json
 import os
 
-import libmr
+# import libmr
 import torch
 import numpy as np
+from tqdm import tqdm
 from torch.autograd import Variable
 import torch.nn.functional as F
 from sklearn.metrics import roc_curve, roc_auc_score
@@ -29,14 +30,25 @@ def evaluate_classifier(networks, dataloader, open_set_dataloader=None, **option
 
     classification_closed_correct = 0
     classification_total = 0
-    for images, labels in dataloader:
+
+    for i in tqdm(range(len(dataloader))):
+        batch = next(iter(dataloader))
+
+        images = batch["imgs"]
+        images = images.cuda()
         images = Variable(images, volatile=True)
+        images = images[:, :, :32, :]
+
+        labels = batch["labels"]
+        labels = labels.cuda(async=True)
+        labels = Variable(labels)
+
         # Predict a classification among known classes
         net_y = netC(images)
         class_predictions = F.softmax(net_y, dim=1)
 
         _, predicted = class_predictions.max(1)
-        classification_closed_correct += sum(predicted.data == labels)
+        classification_closed_correct += sum(predicted.data == labels.type(torch.long))
         classification_total += len(labels)
 
     stats = {
@@ -134,84 +146,84 @@ def openset_autoencoder(dataloader, networks, scale=4):
     return openset_scores
 
 
-def openset_weibull(dataloader_test, dataloader_train, netC):
-    # First generate pre-softmax 'activation vectors' for all training examples
-    print("Weibull: computing features for all correctly-classified training data")
-    activation_vectors = {}
-    for images, labels in dataloader_train:
-        logits = netC(images)
-        correctly_labeled = (logits.data.max(1)[1] == labels)
-        labels_np = labels.cpu().numpy()
-        logits_np = logits.data.cpu().numpy()
-        for i, label in enumerate(labels_np):
-            if not correctly_labeled[i]:
-                continue
-            # If correctly labeled, add this to the list of activation_vectors for this class
-            if label not in activation_vectors:
-                activation_vectors[label] = []
-            activation_vectors[label].append(logits_np[i])
-    print("Computed activation_vectors for {} known classes".format(len(activation_vectors)))
-    for class_idx in activation_vectors:
-        print("Class {}: {} images".format(class_idx, len(activation_vectors[class_idx])))
-
-    # Compute a mean activation vector for each class
-    print("Weibull computing mean activation vectors...")
-    mean_activation_vectors = {}
-    for class_idx in activation_vectors:
-        mean_activation_vectors[class_idx] = np.array(activation_vectors[class_idx]).mean(axis=0)
-
-    # Initialize one libMR Wiebull object for each class
-    print("Fitting Weibull to distance distribution of each class")
-    weibulls = {}
-    for class_idx in activation_vectors:
-        distances = []
-        mav = mean_activation_vectors[class_idx]
-        for v in activation_vectors[class_idx]:
-            distances.append(np.linalg.norm(v - mav))
-        mr = libmr.MR()
-        tail_size = min(len(distances), WEIBULL_TAIL_SIZE)
-        mr.fit_high(distances, tail_size)
-        weibulls[class_idx] = mr
-        print("Weibull params for class {}: {}".format(class_idx, mr.get_params()))
-
-    # Apply Weibull score to every logit
-    weibull_scores = []
-    logits = []
-    classes = activation_vectors.keys()
-    for images, labels in dataloader_test:
-        batch_logits = netC(images).data.cpu().numpy()
-        batch_weibull = np.zeros(shape=batch_logits.shape)
-        for activation_vector in batch_logits:
-            weibull_row = np.ones(len(classes))
-            for class_idx in classes:
-                mav = mean_activation_vectors[class_idx]
-                dist = np.linalg.norm(activation_vector - mav)
-                weibull_row[class_idx] = 1 - weibulls[class_idx].w_score(dist)
-            weibull_scores.append(weibull_row)
-            logits.append(activation_vector)
-    weibull_scores = np.array(weibull_scores)
-    logits = np.array(logits)
-
-    # The following is as close as possible to the precise formulation in
-    #   https://arxiv.org/pdf/1511.06233.pdf
-    #N, K = logits.shape
-    #alpha = np.ones((N, K))
-    #for i in range(N):
-    #    alpha[i][logits[i].argsort()] = np.arange(K) / (K - 1)
-    #adjusted_scores = alpha * weibull_scores + (1 - alpha)
-    #prob_open_set = (logits * (1 - adjusted_scores)).sum(axis=1)
-    #return prob_open_set
-
-    # But this is better
-    # Logits must be positive (lower w score should mean lower probability)
-    #shifted_logits = (logits - np.expand_dims(logits.min(axis=1), -1))
-    #adjusted_scores = alpha * weibull_scores + (1 - alpha)
-    #openmax_scores = -np.log(np.sum(np.exp(shifted_logits * adjusted_scores), axis=1))
-    #return np.array(openmax_scores)
-
-    # Let's just ignore alpha and ignore shifting
-    openmax_scores = -np.log(np.sum(np.exp(logits * weibull_scores), axis=1))
-    return np.array(openmax_scores)
+# def openset_weibull(dataloader_test, dataloader_train, netC):
+#     # First generate pre-softmax 'activation vectors' for all training examples
+#     print("Weibull: computing features for all correctly-classified training data")
+#     activation_vectors = {}
+#     for images, labels in dataloader_train:
+#         logits = netC(images)
+#         correctly_labeled = (logits.data.max(1)[1] == labels)
+#         labels_np = labels.cpu().numpy()
+#         logits_np = logits.data.cpu().numpy()
+#         for i, label in enumerate(labels_np):
+#             if not correctly_labeled[i]:
+#                 continue
+#             # If correctly labeled, add this to the list of activation_vectors for this class
+#             if label not in activation_vectors:
+#                 activation_vectors[label] = []
+#             activation_vectors[label].append(logits_np[i])
+#     print("Computed activation_vectors for {} known classes".format(len(activation_vectors)))
+#     for class_idx in activation_vectors:
+#         print("Class {}: {} images".format(class_idx, len(activation_vectors[class_idx])))
+#
+#     # Compute a mean activation vector for each class
+#     print("Weibull computing mean activation vectors...")
+#     mean_activation_vectors = {}
+#     for class_idx in activation_vectors:
+#         mean_activation_vectors[class_idx] = np.array(activation_vectors[class_idx]).mean(axis=0)
+#
+#     # Initialize one libMR Wiebull object for each class
+#     print("Fitting Weibull to distance distribution of each class")
+#     weibulls = {}
+#     for class_idx in activation_vectors:
+#         distances = []
+#         mav = mean_activation_vectors[class_idx]
+#         for v in activation_vectors[class_idx]:
+#             distances.append(np.linalg.norm(v - mav))
+#         mr = libmr.MR()
+#         tail_size = min(len(distances), WEIBULL_TAIL_SIZE)
+#         mr.fit_high(distances, tail_size)
+#         weibulls[class_idx] = mr
+#         print("Weibull params for class {}: {}".format(class_idx, mr.get_params()))
+#
+#     # Apply Weibull score to every logit
+#     weibull_scores = []
+#     logits = []
+#     classes = activation_vectors.keys()
+#     for images, labels in dataloader_test:
+#         batch_logits = netC(images).data.cpu().numpy()
+#         batch_weibull = np.zeros(shape=batch_logits.shape)
+#         for activation_vector in batch_logits:
+#             weibull_row = np.ones(len(classes))
+#             for class_idx in classes:
+#                 mav = mean_activation_vectors[class_idx]
+#                 dist = np.linalg.norm(activation_vector - mav)
+#                 weibull_row[class_idx] = 1 - weibulls[class_idx].w_score(dist)
+#             weibull_scores.append(weibull_row)
+#             logits.append(activation_vector)
+#     weibull_scores = np.array(weibull_scores)
+#     logits = np.array(logits)
+#
+#     # The following is as close as possible to the precise formulation in
+#     #   https://arxiv.org/pdf/1511.06233.pdf
+#     #N, K = logits.shape
+#     #alpha = np.ones((N, K))
+#     #for i in range(N):
+#     #    alpha[i][logits[i].argsort()] = np.arange(K) / (K - 1)
+#     #adjusted_scores = alpha * weibull_scores + (1 - alpha)
+#     #prob_open_set = (logits * (1 - adjusted_scores)).sum(axis=1)
+#     #return prob_open_set
+#
+#     # But this is better
+#     # Logits must be positive (lower w score should mean lower probability)
+#     #shifted_logits = (logits - np.expand_dims(logits.min(axis=1), -1))
+#     #adjusted_scores = alpha * weibull_scores + (1 - alpha)
+#     #openmax_scores = -np.log(np.sum(np.exp(shifted_logits * adjusted_scores), axis=1))
+#     #return np.array(openmax_scores)
+#
+#     # Let's just ignore alpha and ignore shifting
+#     openmax_scores = -np.log(np.sum(np.exp(logits * weibull_scores), axis=1))
+#     return np.array(openmax_scores)
 
 
 def openset_kplusone(dataloader, netC):

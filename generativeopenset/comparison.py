@@ -4,9 +4,10 @@ from dataloader import CustomDataloader
 
 
 def evaluate_with_comparison(networks, dataloader, **options):
-    comparison_dataloader = get_comparison_dataloader(**options)
+    # comparison_dataloader = get_comparison_dataloader(**options)
+    comparison_dataloader = dataloader
     if comparison_dataloader:
-        options['fold'] = 'openset_{}'.format(comparison_dataloader.dsf.name)
+        options['fold'] = 'openset'
     if options.get('mode'):
         options['fold'] += '_{}'.format(options['mode'])
     if options.get('aux_dataset'):
@@ -15,9 +16,9 @@ def evaluate_with_comparison(networks, dataloader, **options):
 
     new_results = evaluation.evaluate_classifier(networks, dataloader, comparison_dataloader, **options)
 
-    if comparison_dataloader:
-        openset_results = evaluation.evaluate_openset(networks, dataloader, comparison_dataloader, **options)
-        new_results[options['fold']].update(openset_results)
+    # if comparison_dataloader:
+    #     openset_results = evaluation.evaluate_openset(networks, dataloader, comparison_dataloader, **options)
+    #     new_results[options['fold']].update(openset_results)
     return new_results
 
 

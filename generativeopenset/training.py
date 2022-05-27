@@ -2,6 +2,7 @@ import time
 import os
 import torch
 import random
+from tqdm import tqdm
 import torch.nn.functional as F
 from torch.autograd import Variable
 
@@ -31,8 +32,17 @@ def train_gan(networks, optimizers, dataloader, epoch=None, **options):
     batch_size = options['batch_size']
     latent_size = options['latent_size']
 
-    for i, (images, class_labels) in enumerate(dataloader):
+    # for i in tqdm(range(len(dataloader))):
+    for i in tqdm(range(5)):
+        batch = next(iter(dataloader))
+
+        images = batch["imgs"]
+        images = images.cuda()
         images = Variable(images)
+        images = images[:, :, :32, :]
+
+        class_labels = batch["labels"]
+        class_labels = class_labels.cuda(async=True)
         labels = Variable(class_labels)
 
         #ac_scale = random.choice([1, 2, 4, 8])
@@ -47,6 +57,7 @@ def train_gan(networks, optimizers, dataloader, epoch=None, **options):
         noise = make_noise(batch_size, latent_size, sample_scale)
         fake_images = netG(noise, sample_scale)
         logits = netD(fake_images)[:,0]
+        # print(logits.shape)
         loss_fake_sampled = F.softplus(logits).mean()
         log.collect('Discriminator Sampled', loss_fake_sampled)
         loss_fake_sampled.backward()
@@ -69,6 +80,9 @@ def train_gan(networks, optimizers, dataloader, epoch=None, **options):
         #loss_real = -logits.mean() * options['discriminator_weight']
         loss_real.backward()
         log.collect('Discriminator Real', loss_real)
+
+        # print("Real image: ", images.shape)
+        # print("Fake image: ", fake_images.shape)
 
         gp = calc_gradient_penalty(netD, images.data, fake_images.data)
         gp.backward()
@@ -126,7 +140,8 @@ def train_gan(networks, optimizers, dataloader, epoch=None, **options):
 
         # Classify real examples into the correct K classes with hinge loss
         classifier_logits = netC(images)
-        errC = F.softplus(classifier_logits * -labels).mean()
+        classifier_logits = torch.reshape(classifier_logits, (classifier_logits.shape[1], classifier_logits.shape[0]))
+        errC = F.softplus(classifier_logits*labels.type(torch.cuda.FloatTensor)).mean()
         errC.backward()
         log.collect('Classifier Loss', errC)
 
@@ -134,10 +149,10 @@ def train_gan(networks, optimizers, dataloader, epoch=None, **options):
         ############################
 
         # Keep track of accuracy on positive-labeled examples for monitoring
-        log.collect_prediction('Classifier Accuracy', netC(images), labels)
+        # log.collect_prediction('Classifier Accuracy', netC(images), labels)
         #log.collect_prediction('Discriminator Accuracy, Real Data', netD(images), labels)
 
-        log.print_every()
+        # log.print_every()
 
         if i % 100 == 1:
             fixed_noise = make_noise(batch_size, latent_size, sample_scale, fixed_seed=42)

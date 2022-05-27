@@ -7,6 +7,7 @@ from torch.autograd import Variable
 from torch.nn import functional as F
 from vector import clamp_to_unit_sphere
 
+
 from logutil import TimeSeries
 import imutil
 

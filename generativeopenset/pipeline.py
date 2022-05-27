@@ -1,8 +1,4 @@
 #!/usr/bin/env python
-from __future__ import print_function
-import argparse
-import os
-import sys
 import argparse
 import os
 import sys
@@ -18,37 +14,23 @@ from counterfactual import generate_counterfactual
 from comparison import evaluate_with_comparison
 import customized_dataloader
 from customized_dataloader import msd_net_dataset
+import counterfactual
 
-def is_true(x):
-    return not not x and x.lower().startswith('t')
-
-# Dataset (input) and result_dir (output) are always required
 parser = argparse.ArgumentParser()
-parser.add_argument('--result_dir', required=True, help='Output directory for images and model checkpoints')
-
-# Other options can change with every run
-parser.add_argument('--batch_size', type=int, default=64, help='Batch size [default: 64]')
-parser.add_argument('--fold', type=str, default='train', help='Fold [default: train]')
-parser.add_argument('--start_epoch', type=int, help='Epoch to start from (defaults to most recent epoch)')
-parser.add_argument('--count', type=int, default=1, help='Number of counterfactuals to generate')
+parser.add_argument('--result_dir', help='Output directory for images and model checkpoints [default: .]', default='.')
+parser.add_argument('--epochs', type=int, default=10, help='number of epochs to train for [default: 10]')
+parser.add_argument('--aux_dataset', help='Path to aux_dataset file [default: None]')
 
 options = vars(parser.parse_args())
+options = load_options(options)
 
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from dataloader import CustomDataloader
-import counterfactual
-from networks import build_networks
-from options import load_options
-
-
-# TODO: Right now, to edit cf_speed et al, you need to edit params.json
 
 ###################################################################
                             # options #
 ###################################################################
 debug = True
 batch_size = 64
-nb_classes = 6
+nb_classes = 293
 
 
 #####################################################################
@@ -114,14 +96,19 @@ eval_dataloader = torch.utils.data.DataLoader(valid_known_known_dataset,
                                                sampler=torch.utils.data.RandomSampler(
                                                    valid_known_known_index))
 
-start_epoch = options['start_epoch']
-options = load_options(options)
-options['epoch'] = start_epoch
 
-# Batch size must be large enough to make a square grid visual
-options['batch_size'] = nb_classes + 1
-
+#######################################################################
+# Setup Network and training options
+#######################################################################
 networks = build_networks(nb_classes, **options)
+optimizers = get_optimizers(networks, **options)
+start_epoch = get_current_epoch(options['result_dir']) + 1
 
-for i in range(options['count']):
-    counterfactual.generate_open_set(networks, dataloader, **options)
+
+# 1. Train GAN (E+G+D)
+for epoch in range(start_epoch, start_epoch + options['epochs']):
+    train_gan(networks, optimizers, dataloader, epoch=epoch, **options)
+    eval_results = evaluate_with_comparison(networks, eval_dataloader, **options)
+    pprint(eval_results)
+    save_networks(networks, epoch, options['result_dir'])
+
