@@ -17,7 +17,8 @@ from customized_dataloader import msd_net_dataset
 import counterfactual
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--result_dir', help='Output directory for images and model checkpoints [default: .]', default='.')
+parser.add_argument('--result_dir', help='Output directory for images and model checkpoints [default: .]',
+                    default='.')
 parser.add_argument('--epochs', type=int, default=10, help='number of epochs to train for [default: 10]')
 parser.add_argument('--aux_dataset', help='Path to aux_dataset file [default: None]')
 
@@ -29,8 +30,16 @@ options = load_options(options)
                             # options #
 ###################################################################
 debug = True
+
+nb_fake = 2
 batch_size = 64
 nb_classes = 293
+
+GAN_EPOCHS=2
+CLASSIFIER_EPOCHS=2
+CF_COUNT=100
+GENERATOR_MODE="open_set"
+RESULT_DIR="/afs/crc.nd.edu/user/j/jhuang24/scratch_50/jhuang24/models/osrci/debug"
 
 
 #####################################################################
@@ -102,13 +111,24 @@ eval_dataloader = torch.utils.data.DataLoader(valid_known_known_dataset,
 #######################################################################
 networks = build_networks(nb_classes, **options)
 optimizers = get_optimizers(networks, **options)
-start_epoch = get_current_epoch(options['result_dir']) + 1
+start_epoch = get_current_epoch(RESULT_DIR) + 1
 
 
+#######################################################################
+# Experiment pipeline
+#######################################################################
 # 1. Train GAN (E+G+D)
-for epoch in range(start_epoch, start_epoch + options['epochs']):
+for epoch in range(GAN_EPOCHS):
     train_gan(networks, optimizers, dataloader, epoch=epoch, **options)
+    save_networks(networks, epoch, RESULT_DIR)
+
+    # 2. Evaluate on close-set
     eval_results = evaluate_with_comparison(networks, eval_dataloader, **options)
     pprint(eval_results)
-    save_networks(networks, epoch, options['result_dir'])
+
+# 3. Generate a number of counter-factual images
+for i in range(nb_fake):
+    counterfactual.generate_open_set(networks, dataloader, i, RESULT_DIR, **options)
+
+# 4. Automatically label the rightmost column
 

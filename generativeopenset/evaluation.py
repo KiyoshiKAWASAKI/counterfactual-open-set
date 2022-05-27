@@ -31,7 +31,8 @@ def evaluate_classifier(networks, dataloader, open_set_dataloader=None, **option
     classification_closed_correct = 0
     classification_total = 0
 
-    for i in tqdm(range(len(dataloader))):
+    # for i in tqdm(range(len(dataloader))):
+    for i in tqdm(range(5)):
         batch = next(iter(dataloader))
 
         images = batch["imgs"]

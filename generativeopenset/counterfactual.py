@@ -66,7 +66,7 @@ def generate_counterfactual(networks, dataloader, **options):
 
 
 # Generates 'unknown unknown' images unlike any known class
-def generate_open_set(networks, dataloader, **options):
+def generate_open_set(networks, dataloader, fake_index, save_base, nb_classes=293, **options):
     """
     # TODO: Fix Dropout/BatchNormalization outside of training
     for net in networks:
@@ -75,28 +75,38 @@ def generate_open_set(networks, dataloader, **options):
     result_dir = options['result_dir']
 
     # Start with randomly-selected images from the dataloader
-    start_images, _ = dataloader.get_batch()
+    rand_index = np.random.randint(low=0, high=len(dataloader),size=1)
 
-    openset_class = dataloader.num_classes
-    images = generate_counterfactual_column(networks, start_images, openset_class, **options)
+    for i in range(rand_index[0]):
+        batch = next(iter(dataloader))
+
+    images = batch["imgs"]
+    images = images.cuda()
+    images = Variable(images, volatile=True)
+    start_images = images[:, :, :32, :]
+
+    images = generate_counterfactual_column(networks, start_images, nb_classes, **options)
     images = np.array(images).transpose((0,2,3,1))
 
-    dummy_class = 0
-    video_filename = make_video_filename(result_dir, dataloader, dummy_class, dummy_class, label_type='grid')
+    print(images.shape)
+
+    # dummy_class = 0
+    # video_filename = make_video_filename(result_dir, dataloader, dummy_class, dummy_class, label_type='grid')
 
     # Save the images in npy/jpg format as input for the labeling system
-    trajectory_filename = video_filename.replace('.mjpeg', '.npy')
-    np.save(trajectory_filename, images)
-    imutil.show(images, display=False, filename=video_filename.replace('.mjpeg', '.jpg'))
+    save_filename = save_base + "/images/counterfactual_batch_" + str(fake_index) + "_target_class_ind_" + str(nb_classes) + ".npy"
+    np.save(save_filename, images)
+    print("Image batch saved to: ", save_filename)
+    # imutil.show(images, display=False, filename=video_filename.replace('.mjpeg', '.jpg'))
 
     # Save the images in jpg format to display to the user
-    name = 'counterfactual_{}.jpg'.format(int(time.time()))
-    jpg_filename = os.path.join(result_dir, 'images', name)
-    imutil.show(images, filename=jpg_filename)
-    return images
+    # name = 'counterfactual_{}.jpg'.format(int(time.time()))
+    # jpg_filename = os.path.join(result_dir, 'images', name)
+    # imutil.show(images, filename=jpg_filename)
+    # return images
 
 
-log = TimeSeries('Counterfactual')
+# log = TimeSeries('Counterfactual')
 def generate_counterfactual_column(networks, start_images, target_class, **options):
     netG = networks['generator']
     netC = networks['classifier_k']
@@ -135,10 +145,10 @@ def generate_counterfactual_column(networks, start_images, target_class, **optio
 
         scores = F.softmax(augmented_logits, dim=1)
 
-        log.collect('Counterfactual loss', cf_loss)
-        log.collect('Distance Loss', distance_loss)
-        log.collect('Classification as {}'.format(target_class), scores[0][target_class])
-        log.print_every(n_sec=1)
+        # log.collect('Counterfactual loss', cf_loss)
+        # log.collect('Distance Loss', distance_loss)
+        # log.collect('Classification as {}'.format(target_class), scores[0][target_class])
+        # log.print_every(n_sec=1)
 
         dc_dz = autograd.grad(total_loss, z, total_loss)[0]
         z = z - dc_dz * speed
@@ -149,7 +159,7 @@ def generate_counterfactual_column(networks, start_images, target_class, **optio
         # See https://github.com/pytorch/pytorch/issues/4661
         z_value = to_np(z)
         del z
-    print(log)
+    # print(log)
     z = to_torch(z_value)
 
     images = netG(z, gan_scale)

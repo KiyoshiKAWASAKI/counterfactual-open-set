@@ -50,9 +50,9 @@ def get_network_class(name):
 
 def save_networks(networks, epoch, result_dir):
     for name in networks:
-        print(name)
+        # print(name)
         weights = networks[name].state_dict()
-        print("fc1.weight", weights["fc1.weight"].shape)
+        # print("fc1.weight", weights["fc1.weight"].shape)
         # print("fc1.bias", weights["fc1.bias"].shape)
 
         filename = '{}/checkpoints/{}_epoch_{:04d}.pth'.format(result_dir, name, epoch)
