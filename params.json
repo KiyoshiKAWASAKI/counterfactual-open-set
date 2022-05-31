@@ -12,6 +12,7 @@
   "image_size": 32,
   "latent_size": 64,
   "mode": "baseline",
+  "result_dir": "/afs/crc.nd.edu/user/j/jhuang24/scratch_50/jhuang24/models/osrci/debug",
   "random_horizontal_flip": false,
   "reconstruction_weight": 1.0,
   "weight_decay": 0.0

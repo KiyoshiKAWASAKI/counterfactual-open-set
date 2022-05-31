@@ -2,6 +2,7 @@ import time
 import os
 import torch
 import random
+import numpy as np
 from tqdm import tqdm
 import torch.nn.functional as F
 from torch.autograd import Variable
@@ -160,6 +161,8 @@ def train_gan(networks, optimizers, dataloader, epoch=None, **options):
     return True
 
 
+
+
 def demo(networks, images, fixed_noise, ac_scale, sample_scale, result_dir, epoch=0, idx=0):
     netE = networks['encoder']
     netG = networks['generator']
@@ -186,22 +189,55 @@ def demo(networks, images, fixed_noise, ac_scale, sample_scale, result_dir, epoc
     imutil.show(img, filename=filename, resize_to=(256,256), caption=caption)
 
 
-def train_classifier(networks, optimizers, dataloader, epoch=None, **options):
-    for net in networks.values():
-        net.train()
+
+
+def train_classifier(networks,
+                     optimizers,
+                     dataloader,
+                     fake_img_dir,
+                     train_model=True,
+                     save_feature=False,
+                     feature_name=None,
+                     save_feature_path=None):
+
+    if train_model:
+        for net in networks.values():
+            net.train()
+    else:
+        for net in networks.values():
+            net.eval()
+
     netC = networks['classifier_kplusone']
     optimizerC = optimizers['classifier_kplusone']
-    batch_size = options['batch_size']
-    image_size = options['image_size']
 
-    dataset_filename = options.get('aux_dataset')
-    if not dataset_filename or not os.path.exists(dataset_filename):
-        raise ValueError("Aux Dataset not available")
-    print("Using aux_dataset {}".format(dataset_filename))
-    aux_dataloader = FlexibleCustomDataloader(dataset_filename, batch_size=batch_size, image_size=image_size)
+    # TODO: Get fake image batches
+    aux_batch_name_list = os.listdir(fake_img_dir)
+    aux_batch_name_list = [f for f in aux_batch_name_list if f.endswith(".npy")]
+    nb_aux_batch = len(aux_batch_name_list)
 
-    for i, (images, class_labels) in enumerate(dataloader):
+    print("Total number of real img batches: ", len(dataloader))
+    print("Total number of fake img batches: ", nb_aux_batch)
+
+    # TODO: Generate a list for fake batches
+    aux_index_list = np.random.randint(low=0,
+                                       high=nb_aux_batch,
+                                       size=len(dataloader))
+
+    features = []
+    aux_feats = []
+    save_labels = []
+
+    # for i in tqdm(range(len(dataloader))):
+    for i in tqdm(range(5)):
+        batch = next(iter(dataloader))
+
+        images = batch["imgs"]
+        images = images.cuda()
         images = Variable(images)
+        images = images[:, :, :32, :]
+
+        class_labels = batch["labels"]
+        class_labels = class_labels.cuda(async=True)
         labels = Variable(class_labels)
 
         ############################
@@ -212,26 +248,62 @@ def train_classifier(networks, optimizers, dataloader, epoch=None, **options):
         # Classify real examples into the correct K classes
         classifier_logits = netC(images)
         augmented_logits = F.pad(classifier_logits, (0,1))
-        _, labels_idx = labels.max(dim=1)
-        errC = F.nll_loss(F.log_softmax(augmented_logits, dim=1), labels_idx)
-        errC.backward()
-        log.collect('Classifier Loss', errC)
+        # _, labels_idx = labels.max(dim=1)
+        # labels_idx = labels
+        if train_model:
+            errC = F.nll_loss(F.log_softmax(augmented_logits, dim=1), labels.type(torch.cuda.LongTensor))
+            errC.backward()
+
+        # print("images: ", images.shape)
+        # print("classifier_logits: ", classifier_logits.shape)
+        # print("augmented_logits: ", augmented_logits.shape)
+
+        # TODO: Load a batch of fake images
+        aux_images = np.load(os.path.join(fake_img_dir,
+                                          aux_batch_name_list[aux_index_list[i]]))
+        aux_images = aux_images.transpose((0, 3, 1, 2))
+        aux_images = Variable(torch.from_numpy(aux_images))
 
         # Classify aux_dataset examples as open set
-        aux_images, aux_labels = aux_dataloader.get_batch()
-        classifier_logits = netC(Variable(aux_images))
+        classifier_logits = netC(aux_images.cuda())
         augmented_logits = F.pad(classifier_logits, (0,1))
+
+        # print("aux image: ", aux_images.shape)
+        # print("classifier_logits: ", classifier_logits.shape)
+        # print("augmented_logits: ", augmented_logits.shape)
+
         log_soft_open = F.log_softmax(augmented_logits, dim=1)[:, -1]
         errOpenSet = -log_soft_open.mean()
-        errOpenSet.backward()
-        log.collect('Open Set Loss', errOpenSet)
 
-        optimizerC.step()
-        ############################
+        if save_feature:
+            logits = classifier_logits.tolist()
+            aug_logist = augmented_logits.tolist()
+            labels = labels.tolist()
 
-        # Keep track of accuracy on positive-labeled examples for monitoring
-        log.collect_prediction('Classifier Accuracy', netC(images), labels)
+            for one_logit in logits:
+                features.append(one_logit)
 
-        log.print_every()
+            for one_logit in aug_logist:
+                aux_feats.append(one_logit)
+
+            for one_label in labels:
+                save_labels.append(one_label)
+
+        if train_model:
+            errOpenSet.backward()
+            optimizerC.step()
+
+    if save_feature:
+        features_np = np.asarray(features)
+        labels_np = np.asarray(save_labels)
+        aug_features_np = np.asarray(aux_feats)
+
+        print(features_np.shape)
+        print(labels_np.shape)
+        print(aug_features_np.shape)
+
+        np.save(save_feature_path + "/" + feature_name + "_features.npy", features_np)
+        np.save(save_feature_path + "/" + feature_name + "_aug_features.npy", aug_features_np)
+        np.save(save_feature_path + "/" + feature_name + "_labels.npy", labels_np)
 
     return True

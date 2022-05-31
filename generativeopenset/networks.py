@@ -6,7 +6,10 @@ from torch import nn
 from imutil import ensure_directory_exists
 
 
-def build_networks(num_classes, epoch=None, latent_size=10, batch_size=64, **options):
+def build_networks(num_classes,
+                   epoch=None,
+                   latent_size=10,
+                   **options):
     networks = {}
 
     EncoderClass = network_definitions.encoder32
@@ -36,6 +39,8 @@ def build_networks(num_classes, epoch=None, latent_size=10, batch_size=64, **opt
     return networks
 
 
+
+
 def get_network_class(name):
     if type(name) is not str or not hasattr(network_definitions, name):
         print("Error: could not construct network '{}'".format(name))
@@ -48,6 +53,8 @@ def get_network_class(name):
     return getattr(network_definitions, name)
 
 
+
+
 def save_networks(networks, epoch, result_dir):
     for name in networks:
         # print(name)
@@ -56,6 +63,7 @@ def save_networks(networks, epoch, result_dir):
         # print("fc1.bias", weights["fc1.bias"].shape)
 
         filename = '{}/checkpoints/{}_epoch_{:04d}.pth'.format(result_dir, name, epoch)
+        print(filename)
         ensure_directory_exists(filename)
         torch.save(weights, filename)
 

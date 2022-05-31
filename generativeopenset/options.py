@@ -32,7 +32,7 @@ def load_options(options):
     options.update(old_opts)
     options['result_dir'] = os.path.expanduser(options['result_dir'])
 
-    pprint(options)
+    # pprint(options)
     return options
 
 
