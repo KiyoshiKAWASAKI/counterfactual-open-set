@@ -33,8 +33,8 @@ def train_gan(networks, optimizers, dataloader, epoch=None, **options):
     batch_size = options['batch_size']
     latent_size = options['latent_size']
 
-    # for i in tqdm(range(len(dataloader))):
-    for i in tqdm(range(5)):
+    for i in tqdm(range(len(dataloader))):
+    # for i in tqdm(range(5)):
         batch = next(iter(dataloader))
 
         images = batch["imgs"]
@@ -227,8 +227,8 @@ def train_classifier(networks,
     aux_feats = []
     save_labels = []
 
-    # for i in tqdm(range(len(dataloader))):
-    for i in tqdm(range(5)):
+    for i in tqdm(range(len(dataloader))):
+    # for i in tqdm(range(5)):
         batch = next(iter(dataloader))
 
         images = batch["imgs"]

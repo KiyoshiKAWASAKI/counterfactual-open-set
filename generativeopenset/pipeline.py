@@ -9,7 +9,6 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from training import train_gan, train_classifier
 from networks import build_networks, save_networks, get_optimizers
 from options import load_options, get_current_epoch
-from comparison import evaluate_with_comparison
 import customized_dataloader
 from customized_dataloader import msd_net_dataset
 import counterfactual
@@ -29,8 +28,8 @@ options = load_options(options)
 ###################################################################
 debug = True
 
-seed = 0
-nb_fake = 2
+seed = 4
+nb_fake = 50
 batch_size = 64
 
 if debug:
@@ -38,10 +37,10 @@ if debug:
 else:
     nb_classes = 293
 
-GAN_EPOCHS = 2
-CLASSIFIER_EPOCHS = 2
+GAN_EPOCHS = 100
+CLASSIFIER_EPOCHS = 100
 GENERATOR_MODE="open_set"
-RESULT_DIR="/afs/crc.nd.edu/user/j/jhuang24/scratch_50/jhuang24/models/osrci/debug"
+RESULT_DIR="/afs/crc.nd.edu/user/j/jhuang24/scratch_50/jhuang24/models/osrci/seed_4"
 
 
 #####################################################################
