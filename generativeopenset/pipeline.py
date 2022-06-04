@@ -26,16 +26,10 @@ options = load_options(options)
 ###################################################################
                             # options #
 ###################################################################
-debug = True
-
 seed = 4
 nb_fake = 50
 batch_size = 64
-
-if debug:
-    nb_classes = 335
-else:
-    nb_classes = 293
+nb_classes = 293
 
 GAN_EPOCHS = 100
 CLASSIFIER_EPOCHS = 100
